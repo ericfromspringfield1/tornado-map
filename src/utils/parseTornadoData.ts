@@ -16,6 +16,8 @@ const numberFor = (row: RawRow, keys: string[]): number | undefined => {
   const upper = cleaned.toUpperCase();
   const multiplier = upper.endsWith('K') ? 1_000 : upper.endsWith('M') ? 1_000_000 : upper.endsWith('B') ? 1_000_000_000 : 1;
   const parsed = Number.parseFloat(upper.replace(/[KMB]$/, ''));
+  const multiplier = cleaned.endsWith('K') ? 1_000 : cleaned.endsWith('M') ? 1_000_000 : cleaned.endsWith('B') ? 1_000_000_000 : 1;
+  const parsed = Number.parseFloat(cleaned.replace(/[KMB]$/i, ''));
   return Number.isFinite(parsed) ? parsed * multiplier : undefined;
 };
 
@@ -94,6 +96,7 @@ function buildIsoDate(row: RawRow): { date: string; year: number; month: number;
     };
   }
 
+function buildIsoDate(row: RawRow): { date: string; year: number; month: number; day: number } {
   const dateValue = stringFor(row, ['date', 'date_time', 'begin_date_time']);
   if (dateValue) {
     const parsed = new Date(dateValue);
@@ -108,6 +111,7 @@ function buildIsoDate(row: RawRow): { date: string; year: number; month: number;
   }
   const year = numberFor(row, ['yr', 'year']) ?? new Date().getUTCFullYear();
   const month = numberFor(row, ['mo', 'month']) ?? monthNameToNumber(stringFor(row, ['month_name'])) ?? 1;
+  const month = numberFor(row, ['mo', 'month']) ?? 1;
   const day = numberFor(row, ['dy', 'day']) ?? 1;
   return {
     date: `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
@@ -137,12 +141,20 @@ export function normalizeTornadoRow(row: RawRow, index = 0): TornadoEvent {
     cropDamage: numberFor(row, ['cropDamage', 'crop_damage', 'damage_crops', 'cropdmg']),
     pathLengthMiles: numberFor(row, ['len', 'length', 'tor_length', 'pathLengthMiles', 'path_length', 'path_length_miles']),
     pathWidthYards: numberFor(row, ['wid', 'width', 'tor_width', 'pathWidthYards', 'path_width', 'path_width_yards']),
+    rating: normalizeRating(valueFor(row, ['mag', 'rating', 'ef_rating', 'f_scale'])),
+    fatalities: numberFor(row, ['fat', 'fatalities', 'deaths']),
+    injuries: numberFor(row, ['inj', 'injuries']),
+    propertyDamage: numberFor(row, ['propertyDamage', 'property_damage', 'damage_property', 'damage', 'propdmg']),
+    cropDamage: numberFor(row, ['cropDamage', 'crop_damage', 'damage_crops', 'cropdmg']),
+    pathLengthMiles: numberFor(row, ['len', 'length', 'pathLengthMiles', 'path_length', 'path_length_miles']),
+    pathWidthYards: numberFor(row, ['wid', 'width', 'pathWidthYards', 'path_width', 'path_width_yards']),
     startLat: numberFor(row, ['slat', 'start_lat', 'startLat', 'begin_lat']),
     startLon: numberFor(row, ['slon', 'start_lon', 'startLon', 'begin_lon']),
     endLat: numberFor(row, ['elat', 'end_lat', 'endLat', 'end_latitude']),
     endLon: numberFor(row, ['elon', 'end_lon', 'endLon', 'end_longitude']),
     remarks: stringFor(row, ['remarks', 'remark', 'episode_narrative', 'event_narrative']),
     source: stringFor(row, ['source', 'source_dataset', 'data_source', 'fc']),
+    source: stringFor(row, ['source', 'source_dataset', 'fc']),
     outbreakId: stringFor(row, ['outbreak_id', 'episode_id', 'outbreakId']),
     outbreakName: stringFor(row, ['outbreak_name', 'episode_name', 'outbreakName']),
   };

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import sampleCsv from './data/sample-tornadoes.csv?raw';
 import { FilterPanel } from './components/FilterPanel';
 import { MapView } from './components/MapView';
@@ -57,6 +58,18 @@ export default function App() {
   }, []);
 
   const { events, error, loading, sourceLabel } = dataset;
+function loadSampleData(): { events: TornadoEvent[]; error?: string } {
+  try {
+    return { events: parseTornadoData(sampleCsv) };
+  } catch (error) {
+    return { events: [], error: error instanceof Error ? error.message : 'Unable to parse tornado data.' };
+  }
+}
+
+export default function App() {
+  const [{ events, error }] = useState(loadSampleData);
+  const [filters, setFilters] = useState<TornadoFilters>(DEFAULT_FILTERS);
+
   const dateError = validateDateRange(filters);
   const filteredEvents = useMemo(() => filterTornadoes(events, filters), [events, filters]);
   const summary = useMemo(() => summarizeTornadoes(filteredEvents), [filteredEvents]);
@@ -89,6 +102,11 @@ export default function App() {
             </p>
           </header>
           {error ? <div className="rounded-xl bg-amber-50 p-4 text-sm font-medium text-amber-800" role="status">{error} Using bundled sample data instead.</div> : null}
+              Explore a normalized local sample of NOAA/SPC-style tornado records. Filters combine with AND logic, while multiple selections inside a category behave as OR. The data layer is isolated so a future API can replace the CSV loader.
+            </p>
+          </header>
+          {error ? <div className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700" role="alert">{error}</div> : null}
+          {!events.length && !error ? <div className="rounded-xl bg-white p-4 text-sm text-slate-600">Loading tornado data…</div> : null}
           <MapView events={filteredEvents} />
           <SummaryPanel summary={summary} />
         </div>

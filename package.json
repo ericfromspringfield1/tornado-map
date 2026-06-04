@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "import:noaa": "node scripts/import-noaa-storm-events.mjs"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -35,4 +36,5 @@
     "vite": "latest",
     "vitest": "latest"
   }
+}
 }

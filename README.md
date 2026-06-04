@@ -80,6 +80,9 @@ npm run import:noaa -- --start-year=2011 --end-year=2013
 ```
 
 The parser is intentionally isolated in `src/utils/parseTornadoData.ts`, and the importer produces the same normalized shape, so a future API-backed version can replace the local file loader without changing the filter, summary, or map components.
+The app currently imports `src/data/sample-tornadoes.csv` directly with Vite's `?raw` loader. Replace that file with a larger historical tornado CSV, or add another CSV/JSON file under `src/data/` and update the import in `src/App.tsx`.
+
+The parser is intentionally isolated in `src/utils/parseTornadoData.ts`, so a future API-backed version can replace the local file loader without changing the filter, summary, or map components.
 
 ## Expected data fields
 
@@ -98,11 +101,22 @@ The normalizer accepts the internal field names and common NOAA/SPC-style aliase
 | `endLat` / `endLon` | `elat`, `elon`, `end_lat`, `end_lon` |
 | `pathLengthMiles` | `len`, `length`, `tor_length`, `path_length`, `path_length_miles` |
 | `pathWidthYards` | `wid`, `width`, `tor_width`, `path_width`, `path_width_yards` |
+| `date` | `date`, `date_time`, `begin_date_time`; or `yr`, `mo`, `dy` |
+| `time` | `time`, `begin_time` |
+| `state` | `st`, `state`, `state_abbr` |
+| `rating` | `mag`, `rating`, `ef_rating`, `f_scale` |
+| `injuries` | `inj`, `injuries` |
+| `fatalities` | `fat`, `fatalities`, `deaths` |
+| `startLat` / `startLon` | `slat`, `slon`, `start_lat`, `start_lon`, `begin_lat`, `begin_lon` |
+| `endLat` / `endLon` | `elat`, `elon`, `end_lat`, `end_lon` |
+| `pathLengthMiles` | `len`, `length`, `path_length`, `path_length_miles` |
+| `pathWidthYards` | `wid`, `width`, `path_width`, `path_width_yards` |
 | `county` / `counties` | `county`, `cz_name`, `county_name`, `county1`, `county_list` |
 | `propertyDamage` | `propertyDamage`, `property_damage`, `damage_property`, `damage`, `propdmg` |
 | `cropDamage` | `cropDamage`, `crop_damage`, `damage_crops`, `cropdmg` |
 | `remarks` | `remarks`, `remark`, `episode_narrative`, `event_narrative` |
 | `source` | `source`, `source_dataset`, `data_source`, `fc` |
+| `source` | `source`, `source_dataset`, `fc` |
 | `outbreakId` / `outbreakName` | `outbreak_id`, `episode_id`, `outbreak_name`, `episode_name` |
 
 Damage values may be plain numbers or use `K`, `M`, or `B` suffixes. Multi-county fields can be separated with semicolons, commas, or pipes.
@@ -112,6 +126,9 @@ Damage values may be plain numbers or use `K`, `M`, or `B` suffixes. Multi-count
 - The bundled dataset is a small demonstration sample and is not a complete historical archive; run `npm run import:noaa` for the full generated NOAA/NCEI tornado dataset.
 - All filtering is currently client-side; very large datasets may need pagination, vector tiles, or an API-backed search endpoint.
 - The map uses simple straight-line start-to-end tracks from the NOAA details table; importing and joining the NOAA locations table would allow richer multi-point paths later.
+- The bundled dataset is a small demonstration sample and is not a complete historical archive.
+- All filtering is currently client-side; very large datasets may need pagination, vector tiles, or an API-backed search endpoint.
+- The map uses simple straight-line start-to-end tracks because most tornado CSVs do not include detailed path geometry.
 - County names are displayed as provided by the source data and are not yet reconciled to FIPS identifiers.
 - URL query parameter serialization is intentionally deferred, although the filter state is structured to support it.
 
