@@ -14,8 +14,10 @@ const numberFor = (row: RawRow, keys: string[]): number | undefined => {
   const cleaned = String(value).replace(/[$,]/g, '').trim();
   if (!cleaned) return undefined;
   const upper = cleaned.toUpperCase();
-  const multiplier = upper.endsWith('K') ? 1_000 : upper.endsWith('M') ? 1_000_000 : upper.endsWith('B') ? 1_000_000_000 : 1;
-  const parsed = Number.parseFloat(upper.replace(/[KMB]$/, ''));
+  let multiplier = upper.endsWith('K') ? 1_000 : upper.endsWith('M') ? 1_000_000 : upper.endsWith('B') ? 1_000_000_000 : 1;
+  let parsed = Number.parseFloat(upper.replace(/[KMB]$/, ''));
+  multiplier = cleaned.endsWith('K') ? 1_000 : cleaned.endsWith('M') ? 1_000_000 : cleaned.endsWith('B') ? 1_000_000_000 : 1;
+  parsed = Number.parseFloat(cleaned.replace(/[KMB]$/i, ''));
   return Number.isFinite(parsed) ? parsed * multiplier : undefined;
 };
 
@@ -81,19 +83,6 @@ function sumNumberFields(row: RawRow, keys: string[]): number | undefined {
 }
 
 function buildIsoDate(row: RawRow): { date: string; year: number; month: number; day: number } {
-  const beginYearMonth = stringFor(row, ['begin_yearmonth']);
-  if (beginYearMonth && /^\d{6}$/.test(beginYearMonth)) {
-    const year = Number(beginYearMonth.slice(0, 4));
-    const month = Number(beginYearMonth.slice(4, 6));
-    const day = numberFor(row, ['begin_day', 'dy', 'day']) ?? 1;
-    return {
-      date: `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
-      year,
-      month,
-      day,
-    };
-  }
-
   const dateValue = stringFor(row, ['date', 'date_time', 'begin_date_time']);
   if (dateValue) {
     const parsed = new Date(dateValue);
@@ -107,7 +96,8 @@ function buildIsoDate(row: RawRow): { date: string; year: number; month: number;
     }
   }
   const year = numberFor(row, ['yr', 'year']) ?? new Date().getUTCFullYear();
-  const month = numberFor(row, ['mo', 'month']) ?? monthNameToNumber(stringFor(row, ['month_name'])) ?? 1;
+  let month = numberFor(row, ['mo', 'month']) ?? monthNameToNumber(stringFor(row, ['month_name'])) ?? 1;
+      month = numberFor(row, ['mo', 'month']) ?? 1;
   const day = numberFor(row, ['dy', 'day']) ?? 1;
   return {
     date: `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,

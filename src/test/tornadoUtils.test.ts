@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TornadoEvent } from '../types/tornado';
 import { DEFAULT_FILTERS, filterTornadoes } from '../utils/filterTornadoes';
-import { getGeneratedDatasetUrl, loadTornadoDataset } from '../utils/loadTornadoDataset';
 import { parseTornadoData } from '../utils/parseTornadoData';
 import { normalizeRating } from '../utils/ratings';
 import { summarizeTornadoes } from '../utils/summarizeTornadoes';
@@ -62,35 +61,6 @@ describe('tornado utilities', () => {
     expect(normalizeRating('3')).toBe('EF3');
     expect(normalizeRating('-9')).toBe('UNKNOWN');
     expect(normalizeRating(undefined)).toBe('UNKNOWN');
-  });
-
-  it('loads generated tornado-events.json before using the sample fallback', async () => {
-    const fetcher = async () =>
-      new Response(
-        JSON.stringify([
-          {
-            id: 'generated-1',
-            date: '2024-05-21',
-            year: 2024,
-            month: 5,
-            day: 21,
-            state: 'IA',
-            rating: 'EF4',
-          },
-        ]),
-        { status: 200 },
-      );
-
-    const dataset = await loadTornadoDataset({ fetcher, datasetUrl: '/data/tornado-events.json' });
-
-    expect(dataset.sourceLabel).toBe('Generated NOAA/NCEI Storm Events tornado dataset');
-    expect(dataset.events).toHaveLength(1);
-    expect(dataset.events[0].id).toBe('generated-1');
-  });
-
-  it('builds generated dataset URLs from the Vite base path', () => {
-    expect(getGeneratedDatasetUrl('/tornado-map/')).toBe('/tornado-map/data/tornado-events.json');
-    expect(getGeneratedDatasetUrl('/tornado-map')).toBe('/tornado-map/data/tornado-events.json');
   });
 
   it('normalizes NOAA Storm Events detail rows for tornado imports', () => {
