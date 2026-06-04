@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useMemo, useState } from 'react';
 import sampleCsv from './data/sample-tornadoes.csv?raw';
 import { FilterPanel } from './components/FilterPanel';
@@ -8,6 +9,55 @@ import { DEFAULT_FILTERS, filterTornadoes, getAvailableCounties, getAvailableOut
 import { parseTornadoData } from './utils/parseTornadoData';
 import { summarizeTornadoes } from './utils/summarizeTornadoes';
 
+type DatasetState = {
+  events: TornadoEvent[];
+  loading: boolean;
+  error?: string;
+  sourceLabel: string;
+};
+
+function loadSampleData(): TornadoEvent[] {
+  return parseTornadoData(sampleCsv);
+}
+
+async function loadGeneratedNoaaDataset(signal: AbortSignal): Promise<TornadoEvent[] | undefined> {
+  const response = await fetch('/data/tornado-events.json', { signal });
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error(`Unable to load generated NOAA dataset: ${response.status} ${response.statusText}`);
+  const payload = (await response.json()) as Record<string, unknown>[];
+  return parseTornadoData(payload);
+}
+
+export default function App() {
+  const [dataset, setDataset] = useState<DatasetState>(() => ({ events: loadSampleData(), loading: true, sourceLabel: 'Bundled sample CSV' }));
+  const [filters, setFilters] = useState<TornadoFilters>(DEFAULT_FILTERS);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    loadGeneratedNoaaDataset(controller.signal)
+      .then((events) => {
+        if (controller.signal.aborted) return;
+        setDataset({
+          events: events?.length ? events : loadSampleData(),
+          loading: false,
+          sourceLabel: events?.length ? 'Generated NOAA/NCEI Storm Events tornado dataset' : 'Bundled sample CSV',
+        });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setDataset({
+          events: loadSampleData(),
+          loading: false,
+          error: error instanceof Error ? error.message : 'Unable to load tornado data.',
+          sourceLabel: 'Bundled sample CSV fallback',
+        });
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const { events, error, loading, sourceLabel } = dataset;
 function loadSampleData(): { events: TornadoEvent[]; error?: string } {
   try {
     return { events: parseTornadoData(sampleCsv) };
@@ -45,6 +95,13 @@ export default function App() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-storm-700">Historical tornado explorer</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">United States tornado tracks and events</h1>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+              Explore normalized NOAA/SPC-style tornado records. Filters combine with AND logic, while multiple selections inside a category behave as OR. The app loads a generated NOAA/NCEI bulk dataset when available and falls back to the bundled sample CSV.
+            </p>
+            <p className="mt-3 inline-flex rounded-full bg-storm-50 px-3 py-1 text-xs font-semibold text-storm-700" aria-live="polite">
+              Data source: {sourceLabel}{loading ? ' (checking for generated NOAA data...)' : ''}
+            </p>
+          </header>
+          {error ? <div className="rounded-xl bg-amber-50 p-4 text-sm font-medium text-amber-800" role="status">{error} Using bundled sample data instead.</div> : null}
               Explore a normalized local sample of NOAA/SPC-style tornado records. Filters combine with AND logic, while multiple selections inside a category behave as OR. The data layer is isolated so a future API can replace the CSV loader.
             </p>
           </header>

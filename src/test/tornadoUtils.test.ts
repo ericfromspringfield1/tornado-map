@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TornadoEvent } from '../types/tornado';
 import { DEFAULT_FILTERS, filterTornadoes } from '../utils/filterTornadoes';
+import { parseTornadoData } from '../utils/parseTornadoData';
 import { normalizeRating } from '../utils/ratings';
 import { summarizeTornadoes } from '../utils/summarizeTornadoes';
 
@@ -60,6 +61,42 @@ describe('tornado utilities', () => {
     expect(normalizeRating('3')).toBe('EF3');
     expect(normalizeRating('-9')).toBe('UNKNOWN');
     expect(normalizeRating(undefined)).toBe('UNKNOWN');
+  });
+
+  it('normalizes NOAA Storm Events detail rows for tornado imports', () => {
+    const [event] = parseTornadoData([
+      {
+        BEGIN_YEARMONTH: '201104',
+        BEGIN_DAY: '27',
+        BEGIN_TIME: '1505',
+        EVENT_ID: '12345',
+        EPISODE_ID: '99',
+        STATE: 'ALABAMA',
+        EVENT_TYPE: 'Tornado',
+        CZ_NAME: 'TUSCALOOSA',
+        TOR_F_SCALE: 'EF4',
+        INJURIES_DIRECT: '10',
+        INJURIES_INDIRECT: '2',
+        DEATHS_DIRECT: '3',
+        DEATHS_INDIRECT: '1',
+        DAMAGE_PROPERTY: '2.5M',
+        TOR_LENGTH: '12.4',
+        TOR_WIDTH: '880',
+        BEGIN_LAT: '33.1',
+        BEGIN_LON: '-87.5',
+        END_LAT: '33.3',
+        END_LON: '-87.1',
+        DATA_SOURCE: 'CSV',
+      },
+    ]);
+
+    expect(event.date).toBe('2011-04-27');
+    expect(event.rating).toBe('EF4');
+    expect(event.fatalities).toBe(4);
+    expect(event.injuries).toBe(12);
+    expect(event.propertyDamage).toBe(2_500_000);
+    expect(event.pathLengthMiles).toBe(12.4);
+    expect(event.startLat).toBe(33.1);
   });
 
   it('filters by inclusive date ranges', () => {

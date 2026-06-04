@@ -13,6 +13,9 @@ const numberFor = (row: RawRow, keys: string[]): number | undefined => {
   if (value === undefined) return undefined;
   const cleaned = String(value).replace(/[$,]/g, '').trim();
   if (!cleaned) return undefined;
+  const upper = cleaned.toUpperCase();
+  const multiplier = upper.endsWith('K') ? 1_000 : upper.endsWith('M') ? 1_000_000 : upper.endsWith('B') ? 1_000_000_000 : 1;
+  const parsed = Number.parseFloat(upper.replace(/[KMB]$/, ''));
   const multiplier = cleaned.endsWith('K') ? 1_000 : cleaned.endsWith('M') ? 1_000_000 : cleaned.endsWith('B') ? 1_000_000_000 : 1;
   const parsed = Number.parseFloat(cleaned.replace(/[KMB]$/i, ''));
   return Number.isFinite(parsed) ? parsed * multiplier : undefined;
@@ -68,6 +71,31 @@ function parseCsv(text: string): RawRow[] {
   return body.map((cells) => Object.fromEntries(headers.map((header, index) => [header.trim(), cells[index]?.trim() ?? ''])));
 }
 
+function monthNameToNumber(value?: string): number | undefined {
+  if (!value) return undefined;
+  const index = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'].indexOf(value.toUpperCase());
+  return index >= 0 ? index + 1 : undefined;
+}
+
+function sumNumberFields(row: RawRow, keys: string[]): number | undefined {
+  const values = keys.map((key) => numberFor(row, [key])).filter((value) => value !== undefined);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : undefined;
+}
+
+function buildIsoDate(row: RawRow): { date: string; year: number; month: number; day: number } {
+  const beginYearMonth = stringFor(row, ['begin_yearmonth']);
+  if (beginYearMonth && /^\d{6}$/.test(beginYearMonth)) {
+    const year = Number(beginYearMonth.slice(0, 4));
+    const month = Number(beginYearMonth.slice(4, 6));
+    const day = numberFor(row, ['begin_day', 'dy', 'day']) ?? 1;
+    return {
+      date: `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
+      year,
+      month,
+      day,
+    };
+  }
+
 function buildIsoDate(row: RawRow): { date: string; year: number; month: number; day: number } {
   const dateValue = stringFor(row, ['date', 'date_time', 'begin_date_time']);
   if (dateValue) {
@@ -82,6 +110,7 @@ function buildIsoDate(row: RawRow): { date: string; year: number; month: number;
     }
   }
   const year = numberFor(row, ['yr', 'year']) ?? new Date().getUTCFullYear();
+  const month = numberFor(row, ['mo', 'month']) ?? monthNameToNumber(stringFor(row, ['month_name'])) ?? 1;
   const month = numberFor(row, ['mo', 'month']) ?? 1;
   const day = numberFor(row, ['dy', 'day']) ?? 1;
   return {
@@ -105,6 +134,13 @@ export function normalizeTornadoRow(row: RawRow, index = 0): TornadoEvent {
     state: (stringFor(row, ['st', 'state', 'state_abbr']) ?? 'Unknown').toUpperCase(),
     county,
     counties,
+    rating: normalizeRating(valueFor(row, ['mag', 'magnitude', 'tor_f_scale', 'rating', 'ef_rating', 'f_scale'])),
+    fatalities: sumNumberFields(row, ['deaths_direct', 'deaths_indirect']) ?? numberFor(row, ['fat', 'fatalities', 'deaths']),
+    injuries: sumNumberFields(row, ['injuries_direct', 'injuries_indirect']) ?? numberFor(row, ['inj', 'injuries']),
+    propertyDamage: numberFor(row, ['propertyDamage', 'property_damage', 'damage_property', 'damage', 'propdmg']),
+    cropDamage: numberFor(row, ['cropDamage', 'crop_damage', 'damage_crops', 'cropdmg']),
+    pathLengthMiles: numberFor(row, ['len', 'length', 'tor_length', 'pathLengthMiles', 'path_length', 'path_length_miles']),
+    pathWidthYards: numberFor(row, ['wid', 'width', 'tor_width', 'pathWidthYards', 'path_width', 'path_width_yards']),
     rating: normalizeRating(valueFor(row, ['mag', 'rating', 'ef_rating', 'f_scale'])),
     fatalities: numberFor(row, ['fat', 'fatalities', 'deaths']),
     injuries: numberFor(row, ['inj', 'injuries']),
@@ -117,6 +153,7 @@ export function normalizeTornadoRow(row: RawRow, index = 0): TornadoEvent {
     endLat: numberFor(row, ['elat', 'end_lat', 'endLat', 'end_latitude']),
     endLon: numberFor(row, ['elon', 'end_lon', 'endLon', 'end_longitude']),
     remarks: stringFor(row, ['remarks', 'remark', 'episode_narrative', 'event_narrative']),
+    source: stringFor(row, ['source', 'source_dataset', 'data_source', 'fc']),
     source: stringFor(row, ['source', 'source_dataset', 'fc']),
     outbreakId: stringFor(row, ['outbreak_id', 'episode_id', 'outbreakId']),
     outbreakName: stringFor(row, ['outbreak_name', 'episode_name', 'outbreakName']),
