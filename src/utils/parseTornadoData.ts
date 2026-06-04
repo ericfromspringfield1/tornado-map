@@ -1,0 +1,154 @@
+import type { TornadoEvent } from '../types/tornado';
+import { normalizeRating } from './ratings';
+
+type RawRow = Record<string, unknown>;
+
+const valueFor = (row: RawRow, keys: string[]): unknown => {
+  const normalized = Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase().trim(), value]));
+  return keys.map((key) => normalized[key.toLowerCase()]).find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+};
+
+const numberFor = (row: RawRow, keys: string[]): number | undefined => {
+  const value = valueFor(row, keys);
+  if (value === undefined) return undefined;
+  const cleaned = String(value).replace(/[$,]/g, '').trim();
+  if (!cleaned) return undefined;
+  const upper = cleaned.toUpperCase();
+  const multiplier = upper.endsWith('K') ? 1_000 : upper.endsWith('M') ? 1_000_000 : upper.endsWith('B') ? 1_000_000_000 : 1;
+  const parsed = Number.parseFloat(upper.replace(/[KMB]$/, ''));
+  return Number.isFinite(parsed) ? parsed * multiplier : undefined;
+};
+
+const stringFor = (row: RawRow, keys: string[]): string | undefined => {
+  const value = valueFor(row, keys);
+  return value === undefined ? undefined : String(value).trim() || undefined;
+};
+
+const splitCounties = (value?: string): string[] | undefined => {
+  if (!value) return undefined;
+  const counties = value
+    .split(/[;,|]/)
+    .map((county) => county.trim())
+    .filter(Boolean);
+  return counties.length ? counties : undefined;
+};
+
+function parseCsv(text: string): RawRow[] {
+  const rows: string[][] = [];
+  let field = '';
+  let row: string[] = [];
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      field += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      row.push(field);
+      field = '';
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && next === '\n') index += 1;
+      row.push(field);
+      if (row.some((cell) => cell.trim())) rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  const [headers = [], ...body] = rows;
+  return body.map((cells) => Object.fromEntries(headers.map((header, index) => [header.trim(), cells[index]?.trim() ?? ''])));
+}
+
+function monthNameToNumber(value?: string): number | undefined {
+  if (!value) return undefined;
+  const index = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'].indexOf(value.toUpperCase());
+  return index >= 0 ? index + 1 : undefined;
+}
+
+function sumNumberFields(row: RawRow, keys: string[]): number | undefined {
+  const values = keys.map((key) => numberFor(row, [key])).filter((value) => value !== undefined);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : undefined;
+}
+
+function buildIsoDate(row: RawRow): { date: string; year: number; month: number; day: number } {
+  const beginYearMonth = stringFor(row, ['begin_yearmonth']);
+  if (beginYearMonth && /^\d{6}$/.test(beginYearMonth)) {
+    const year = Number(beginYearMonth.slice(0, 4));
+    const month = Number(beginYearMonth.slice(4, 6));
+    const day = numberFor(row, ['begin_day', 'dy', 'day']) ?? 1;
+    return {
+      date: `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
+      year,
+      month,
+      day,
+    };
+  }
+
+  const dateValue = stringFor(row, ['date', 'date_time', 'begin_date_time']);
+  if (dateValue) {
+    const parsed = new Date(dateValue);
+    if (!Number.isNaN(parsed.getTime())) {
+      return {
+        date: parsed.toISOString().slice(0, 10),
+        year: parsed.getUTCFullYear(),
+        month: parsed.getUTCMonth() + 1,
+        day: parsed.getUTCDate(),
+      };
+    }
+  }
+  const year = numberFor(row, ['yr', 'year']) ?? new Date().getUTCFullYear();
+  const month = numberFor(row, ['mo', 'month']) ?? monthNameToNumber(stringFor(row, ['month_name'])) ?? 1;
+  const day = numberFor(row, ['dy', 'day']) ?? 1;
+  return {
+    date: `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
+    year,
+    month,
+    day,
+  };
+}
+
+export function normalizeTornadoRow(row: RawRow, index = 0): TornadoEvent {
+  const date = buildIsoDate(row);
+  const county = stringFor(row, ['county', 'cz_name', 'county_name', 'county1']);
+  const counties = splitCounties(stringFor(row, ['counties', 'county_list'])) ?? splitCounties(county);
+  const id = stringFor(row, ['id', 'om', 'event_id', 'eventid', 'source_id']) ?? `row-${index + 1}`;
+
+  return {
+    id,
+    ...date,
+    time: stringFor(row, ['time', 'begin_time']),
+    state: (stringFor(row, ['st', 'state', 'state_abbr']) ?? 'Unknown').toUpperCase(),
+    county,
+    counties,
+    rating: normalizeRating(valueFor(row, ['mag', 'magnitude', 'tor_f_scale', 'rating', 'ef_rating', 'f_scale'])),
+    fatalities: sumNumberFields(row, ['deaths_direct', 'deaths_indirect']) ?? numberFor(row, ['fat', 'fatalities', 'deaths']),
+    injuries: sumNumberFields(row, ['injuries_direct', 'injuries_indirect']) ?? numberFor(row, ['inj', 'injuries']),
+    propertyDamage: numberFor(row, ['propertyDamage', 'property_damage', 'damage_property', 'damage', 'propdmg']),
+    cropDamage: numberFor(row, ['cropDamage', 'crop_damage', 'damage_crops', 'cropdmg']),
+    pathLengthMiles: numberFor(row, ['len', 'length', 'tor_length', 'pathLengthMiles', 'path_length', 'path_length_miles']),
+    pathWidthYards: numberFor(row, ['wid', 'width', 'tor_width', 'pathWidthYards', 'path_width', 'path_width_yards']),
+    startLat: numberFor(row, ['slat', 'start_lat', 'startLat', 'begin_lat']),
+    startLon: numberFor(row, ['slon', 'start_lon', 'startLon', 'begin_lon']),
+    endLat: numberFor(row, ['elat', 'end_lat', 'endLat', 'end_latitude']),
+    endLon: numberFor(row, ['elon', 'end_lon', 'endLon', 'end_longitude']),
+    remarks: stringFor(row, ['remarks', 'remark', 'episode_narrative', 'event_narrative']),
+    source: stringFor(row, ['source', 'source_dataset', 'data_source', 'fc']),
+    outbreakId: stringFor(row, ['outbreak_id', 'episode_id', 'outbreakId']),
+    outbreakName: stringFor(row, ['outbreak_name', 'episode_name', 'outbreakName']),
+  };
+}
+
+export function parseTornadoData(input: string | RawRow[]): TornadoEvent[] {
+  const rows = typeof input === 'string' ? parseCsv(input) : input;
+  return rows.map((row, index) => normalizeTornadoRow(row, index));
+}
